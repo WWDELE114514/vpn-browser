@@ -48,17 +48,62 @@ fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn default_config(state: &AppState) -> String {
     format!(
-        "mixed-port: {}\nexternal-controller: 127.0.0.1:{}\nallow-lan: false\nbind-address: 127.0.0.1\nmode: direct\nlog-level: warning\nproxies: []\nproxy-groups: []\nrules:\n  - MATCH,DIRECT\n",
+        "mixed-port: {}\nexternal-controller: 127.0.0.1:{}\nallow-lan: false\nbind-address: 127.0.0.1\nmode: rule\nlog-level: warning\nproxies: []\nproxy-groups: []\nrules:\n  - MATCH,DIRECT\n",
         state.mixed_port, state.controller_port
     )
 }
 
-fn start_core(app: &AppHandle, state: &AppState) -> Result<(), String> {
+fn normalize_config(app: &AppHandle, state: &AppState) -> Result<PathBuf, String> {
     let dir = config_dir(app)?;
     let cfg = dir.join("config.yaml");
+
     if !cfg.exists() {
         fs::write(&cfg, default_config(state)).map_err(|e| e.to_string())?;
+        return Ok(cfg);
     }
+
+    let text = fs::read_to_string(&cfg).map_err(|e| e.to_string())?;
+    let mut val: serde_yaml::Value = match serde_yaml::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return Ok(cfg),
+    };
+
+    if let Some(map) = val.as_mapping_mut() {
+        let key = |k: &str| serde_yaml::Value::String(k.to_string());
+        map.insert(
+            key("mixed-port"),
+            serde_yaml::Value::Number((state.mixed_port as u64).into()),
+        );
+        map.insert(
+            key("external-controller"),
+            serde_yaml::Value::String(format!("127.0.0.1:{}", state.controller_port)),
+        );
+        map.insert(key("allow-lan"), serde_yaml::Value::Bool(false));
+        map.insert(
+            key("bind-address"),
+            serde_yaml::Value::String("127.0.0.1".into()),
+        );
+        map.insert(key("log-level"), serde_yaml::Value::String("warning".into()));
+        for k in ["port", "socks-port", "redir-port", "tproxy-port", "tun", "secret"] {
+            map.remove(&key(k));
+        }
+        if let Some(mode) = map
+            .get(&key("mode"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_lowercase())
+        {
+            map.insert(key("mode"), serde_yaml::Value::String(mode));
+        }
+        let out = serde_yaml::to_string(&val).map_err(|e| e.to_string())?;
+        fs::write(&cfg, out).map_err(|e| e.to_string())?;
+    }
+    Ok(cfg)
+}
+
+fn start_core(app: &AppHandle, state: &AppState) -> Result<(), String> {
+    let cfg = normalize_config(app, state)?;
+    let dir = config_dir(app)?;
+    let log_path = dir.join("mihomo.log");
 
     let sidecar = app.shell().sidecar("mihomo").map_err(|e| e.to_string())?;
     let (mut rx, child) = sidecar
@@ -72,11 +117,20 @@ fn start_core(app: &AppHandle, state: &AppState) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     tauri::async_runtime::spawn(async move {
+        use std::io::Write;
         use tauri_plugin_shell::process::CommandEvent;
+        let mut log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .ok();
         while let Some(event) = rx.recv().await {
             match event {
-                CommandEvent::Stderr(line) => {
-                    let _ = String::from_utf8(line);
+                CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
+                    if let Some(f) = log.as_mut() {
+                        let _ = f.write_all(&line);
+                        let _ = f.write_all(b"\n");
+                    }
                 }
                 CommandEvent::Terminated(_) => break,
                 _ => {}
@@ -341,36 +395,12 @@ fn set_ui_height(app: AppHandle, state: State<'_, AppState>, height: f64) -> Res
 
 #[tauri::command]
 async fn import_config(app: AppHandle, content: String) -> Result<(), String> {
-    let mut val: serde_yaml::Value =
+    let _: serde_yaml::Value =
         serde_yaml::from_str(&content).map_err(|e| format!("YAML 解析失败: {e}"))?;
-
-    let st = app.state::<AppState>();
-    let map = val
-        .as_mapping_mut()
-        .ok_or_else(|| "配置根节点必须是映射".to_string())?;
-    let key = |k: &str| serde_yaml::Value::String(k.to_string());
-
-    map.insert(
-        key("mixed-port"),
-        serde_yaml::Value::Number((st.mixed_port as u64).into()),
-    );
-    map.insert(
-        key("external-controller"),
-        serde_yaml::Value::String(format!("127.0.0.1:{}", st.controller_port)),
-    );
-    map.insert(key("allow-lan"), serde_yaml::Value::Bool(false));
-    map.insert(
-        key("bind-address"),
-        serde_yaml::Value::String("127.0.0.1".into()),
-    );
-    map.insert(key("log-level"), serde_yaml::Value::String("warning".into()));
-    map.remove(&serde_yaml::Value::String("tun".into()));
-    map.remove(&serde_yaml::Value::String("secret".into()));
-
-    let out = serde_yaml::to_string(&val).map_err(|e| e.to_string())?;
     let dir = config_dir(&app)?;
-    fs::write(dir.join("config.yaml"), out).map_err(|e| e.to_string())?;
-
+    fs::write(dir.join("config.yaml"), content).map_err(|e| e.to_string())?;
+    let st = app.state::<AppState>();
+    normalize_config(&app, st.inner())?;
     restart_core(&app, st.inner()).await
 }
 
@@ -433,12 +463,19 @@ async fn select_proxy(app: AppHandle, group: String, name: String) -> Result<(),
 }
 
 #[tauri::command]
-fn core_status(app: AppHandle) -> serde_json::Value {
-    let running = app
-        .try_state::<AppState>()
-        .map(|st| st.child.lock().unwrap().is_some())
-        .unwrap_or(false);
-    serde_json::json!({ "running": running })
+async fn core_status(app: AppHandle) -> serde_json::Value {
+    let (running, port) = match app.try_state::<AppState>() {
+        Some(st) => (st.child.lock().unwrap().is_some(), st.controller_port),
+        None => (false, 0),
+    };
+    let listening = if port > 0 {
+        tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+    } else {
+        false
+    };
+    serde_json::json!({ "running": running, "listening": listening, "controller": port })
 }
 
 #[tauri::command]
