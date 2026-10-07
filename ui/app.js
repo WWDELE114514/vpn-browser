@@ -3,6 +3,7 @@ const { invoke } = window.__TAURI__.core;
 const $ = (id) => document.getElementById(id);
 
 const addr = $("addr");
+const tabsEl = $("tabs");
 const panel = $("panel");
 const vpnBtn = $("vpn");
 const coreState = $("coreState");
@@ -11,9 +12,58 @@ const groupsEl = $("groups");
 
 let panelOpen = false;
 let currentMode = "direct";
+let creatingFallback = false;
 
-const TOOLBAR_H = 46;
-const PANEL_H = 460;
+const UI_H = 80;
+const PANEL_H = 500;
+const HOME = "https://www.bing.com";
+
+function renderTabs(tabs) {
+  tabsEl.innerHTML = "";
+  let activeTab = null;
+
+  for (const t of tabs) {
+    const el = document.createElement("div");
+    el.className = "tab" + (t.active ? " active" : "") + (t.incognito ? " incognito" : "");
+
+    const title = document.createElement("span");
+    title.className = "tab-title";
+    title.textContent = t.title || "新标签";
+
+    const close = document.createElement("button");
+    close.className = "tab-close";
+    close.textContent = "\u00d7";
+    close.title = "关闭标签";
+    close.addEventListener("click", (e) => {
+      e.stopPropagation();
+      invoke("close_tab", { id: t.id }).catch(console.error);
+    });
+
+    el.appendChild(title);
+    el.appendChild(close);
+    el.addEventListener("click", () => {
+      invoke("activate_tab", { id: t.id }).catch(console.error);
+    });
+
+    tabsEl.appendChild(el);
+    if (t.active) activeTab = t;
+  }
+
+  if (activeTab) {
+    addr.value = activeTab.url === "about:blank" ? "" : activeTab.url;
+  }
+
+  if (tabs.length === 0 && !creatingFallback) {
+    creatingFallback = true;
+    invoke("new_tab", { url: HOME, incognito: false })
+      .catch(console.error)
+      .finally(() => {
+        creatingFallback = false;
+      });
+  }
+}
+
+window.__tabs = renderTabs;
 
 async function go() {
   const url = addr.value.trim();
@@ -33,14 +83,17 @@ $("back").addEventListener("click", () => invoke("go_back").catch(console.error)
 $("forward").addEventListener("click", () => invoke("go_forward").catch(console.error));
 $("reload").addEventListener("click", () => invoke("reload").catch(console.error));
 
-window.__onNav = (url) => {
-  if (url && url !== "about:blank") addr.value = url;
-};
+$("newtab").addEventListener("click", () =>
+  invoke("new_tab", { url: HOME, incognito: false }).catch(console.error)
+);
+$("inctab").addEventListener("click", () =>
+  invoke("new_tab", { url: HOME, incognito: true }).catch(console.error)
+);
 
 async function setPanel(open) {
   panelOpen = open;
   panel.classList.toggle("open", open);
-  await invoke("set_ui_height", { height: open ? PANEL_H : TOOLBAR_H });
+  await invoke("set_ui_height", { height: open ? PANEL_H : UI_H });
   if (open) {
     refreshCoreState();
     loadProxies();
@@ -173,4 +226,13 @@ async function loadProxies() {
   }
 }
 
-invoke("navigate", { url: "https://www.bing.com" }).catch(console.error);
+(async function init() {
+  try {
+    const data = await invoke("list_tabs");
+    const active = data.active;
+    const tabs = (data.tabs || []).map((t) => ({ ...t, active: t.id === active }));
+    renderTabs(tabs);
+  } catch (e) {
+    console.error(e);
+  }
+})();

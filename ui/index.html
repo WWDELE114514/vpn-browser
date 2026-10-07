@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div class="tabbar">
+      <div id="tabs" class="tabs"></div>
+      <button id="newtab" class="tabbtn" title="新建标签">+</button>
+      <button id="inctab" class="tabbtn" title="新建无痕标签">&#9681;</button>
+    </div>
+
     <div class="toolbar">
       <button id="back" class="icon" title="后退">&#8592;</button>
       <button id="forward" class="icon" title="前进">&#8594;</button>
@@ -51,6 +57,12 @@
         <div id="groups" class="groups">
           <div class="hint">导入配置后显示代理组</div>
         </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">隐私</div>
+        <div class="hint">WebRTC 防泄漏：已启用（强制禁用非代理 UDP，WebRTC 只走代理出口）</div>
+        <div class="hint">无痕标签：不写入磁盘缓存与 Cookie，关闭即清除</div>
       </div>
     </div>
 
