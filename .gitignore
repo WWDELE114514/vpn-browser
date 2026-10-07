@@ -1,0 +1,9 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/*.exe
+src-tauri/icons/
+ui/icon.png
+dist/
+*.log
+.DS_Store

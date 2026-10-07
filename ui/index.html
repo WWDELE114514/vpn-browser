@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VpnBrowser</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="toolbar">
+      <button id="back" class="icon" title="后退">&#8592;</button>
+      <button id="forward" class="icon" title="前进">&#8594;</button>
+      <button id="reload" class="icon" title="刷新">&#8635;</button>
+      <input id="addr" type="text" placeholder="输入网址或搜索内容" spellcheck="false" />
+      <button id="go" class="icon" title="前往">&#10140;</button>
+      <button id="vpn" class="pill" title="VPN 开关">VPN</button>
+      <button id="settings" class="icon" title="设置">&#9881;</button>
+    </div>
+
+    <div id="panel" class="panel">
+      <div class="panel-head">
+        <span class="panel-title">设置</span>
+        <span id="coreState" class="badge">核心状态检测中…</span>
+      </div>
+
+      <div class="section">
+        <div class="section-title">VPN 模式</div>
+        <div class="row">
+          <button class="mode" data-mode="direct">直连</button>
+          <button class="mode" data-mode="rule">规则</button>
+          <button class="mode" data-mode="global">全局</button>
+          <span id="modeState" class="hint"></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">导入 Clash / Clash Verge Rev 配置</div>
+        <div class="row">
+          <input id="subUrl" type="text" placeholder="订阅链接 https://..." spellcheck="false" />
+          <button id="sub" class="btn">订阅导入</button>
+        </div>
+        <textarea id="configText" placeholder="或直接粘贴 Clash YAML 配置内容（含 proxies / proxy-groups）"></textarea>
+        <div class="row">
+          <button id="import" class="btn primary">导入配置</button>
+          <button id="restart" class="btn">重启核心</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">节点选择</div>
+        <div id="groups" class="groups">
+          <div class="hint">导入配置后显示代理组</div>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
