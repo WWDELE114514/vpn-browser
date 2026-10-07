@@ -5,6 +5,9 @@
 ## 特性
 
 - 基于 Tauri v2 + 系统 WebView2，内存占用远低于 Chromium/Electron 系浏览器
+- **多标签页**：每个标签一个独立 WebView，可任意新建 / 切换 / 关闭
+- **无痕标签**：基于 WebView2 InPrivate，不落盘缓存与 Cookie，关闭即清除
+- **WebRTC 防泄漏**：强制 `disable_non_proxied_udp`，WebRTC 只走代理出口，不暴露真实 IP
 - 内置 mihomo 核心（sidecar 打包），支持 ss / vmess / vless / trojan / hysteria / hysteria2 / tuic 等全部 Clash 节点协议
 - 导入方式：订阅链接 / 直接粘贴 Clash YAML
 - 代理组（Selector / URLTest / Fallback）节点切换
@@ -21,9 +24,12 @@ src-tauri/     Rust 后端
 .github/       云端构建 Windows 安装包
 ```
 
-浏览器把网页内容放在一个独立 WebView 中，创建时通过 WebView2 的
-`--proxy-server=socks5://127.0.0.1:<port>` 指向内置 mihomo 的混合端口，
-从而做到「只代理浏览器」。
+每个标签页对应一个 `content-<id>` 子 WebView，活动标签显示在工具栏下方，
+其余标签移出可视区域；无痕标签在创建时开启 `incognito`。
+
+浏览器通过 WebView2 环境变量
+`--proxy-server=socks5://127.0.0.1:<port> --force-webrtc-ip-handling-policy=disable_non_proxied_udp`
+把流量指向内置 mihomo 的混合端口，从而做到「只代理浏览器」且防 WebRTC 泄漏。
 
 ## 本地构建
 
