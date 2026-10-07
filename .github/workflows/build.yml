@@ -35,10 +35,13 @@ jobs:
 
       - name: Download mihomo core
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path src-tauri/binaries | Out-Null
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" -Headers @{ "User-Agent" = "gh-actions" }
+          $headers = @{ "User-Agent" = "gh-actions"; "Authorization" = "Bearer $env:GH_TOKEN" }
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" -Headers $headers
           $asset = $release.assets | Where-Object { $_.name -match "^mihomo-windows-amd64-v.*\.zip$" } | Select-Object -First 1
           if (-not $asset) { throw "mihomo amd64 asset not found" }
           Write-Host "Downloading $($asset.name)"
