@@ -86,3 +86,12 @@ jobs:
           name: VpnBrowser-windows
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.${{ github.run_number }}
+          name: VpnBrowser v0.1.${{ github.run_number }}
+          body: "自动构建的 Windows 安装包（含内置 mihomo 核心）。"
+          files: src-tauri/target/release/bundle/nsis/*.exe
