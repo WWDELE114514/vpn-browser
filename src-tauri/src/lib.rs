@@ -132,13 +132,6 @@ fn reload(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_devtools(app: AppHandle) {
-    if let Some(wv) = app.get_webview("content") {
-        wv.open_devtools();
-    }
-}
-
-#[tauri::command]
 fn get_ports(state: State<'_, AppState>) -> serde_json::Value {
     serde_json::json!({
         "mixed": state.mixed_port,
@@ -202,8 +195,8 @@ async fn import_config(app: AppHandle, content: String) -> Result<(), String> {
         key("log-level"),
         serde_yaml::Value::String("warning".into()),
     );
-    map.remove(serde_yaml::Value::String("tun".into()));
-    map.remove(serde_yaml::Value::String("secret".into()));
+    map.remove(&serde_yaml::Value::String("tun".into()));
+    map.remove(&serde_yaml::Value::String("secret".into()));
 
     let out = serde_yaml::to_string(&val).map_err(|e| e.to_string())?;
     let dir = config_dir(&app)?;
@@ -293,7 +286,6 @@ pub fn run() {
             go_back,
             go_forward,
             reload,
-            open_devtools,
             get_ports,
             set_ui_height,
             import_config,
@@ -329,26 +321,28 @@ pub fn run() {
                 .min_inner_size(640.0, 420.0)
                 .build()?;
 
-            WebviewBuilder::new("ui", WebviewUrl::App("index.html".into()))
-                .position(0.0, 0.0)
-                .size(1200.0, DEFAULT_TOOLBAR_H)
-                .build_as_child(&window)?;
+            window.add_child(
+                WebviewBuilder::new("ui", WebviewUrl::App("index.html".into())),
+                LogicalPosition::new(0.0, 0.0),
+                LogicalSize::new(1200.0, DEFAULT_TOOLBAR_H),
+            )?;
 
             let nav_handle = app.handle().clone();
-            WebviewBuilder::new(
-                "content",
-                WebviewUrl::External("about:blank".parse().unwrap()),
-            )
-            .position(0.0, DEFAULT_TOOLBAR_H)
-            .size(1200.0, 800.0 - DEFAULT_TOOLBAR_H)
-            .on_navigation(move |url| {
-                if let Some(ui) = nav_handle.get_webview("ui") {
-                    let u = url.as_str().replace('\\', "\\\\").replace('\'', "\\'");
-                    let _ = ui.eval(&format!("window.__onNav && window.__onNav('{u}')"));
-                }
-                true
-            })
-            .build_as_child(&window)?;
+            window.add_child(
+                WebviewBuilder::new(
+                    "content",
+                    WebviewUrl::External("about:blank".parse().unwrap()),
+                )
+                .on_navigation(move |url| {
+                    if let Some(ui) = nav_handle.get_webview("ui") {
+                        let u = url.as_str().replace('\\', "\\\\").replace('\'', "\\'");
+                        let _ = ui.eval(&format!("window.__onNav && window.__onNav('{u}')"));
+                    }
+                    true
+                }),
+                LogicalPosition::new(0.0, DEFAULT_TOOLBAR_H),
+                LogicalSize::new(1200.0, 800.0 - DEFAULT_TOOLBAR_H),
+            )?;
 
             let win_for_event = window.clone();
             let app_for_event = app.handle().clone();
