@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, Position, Size, State, WebviewBuilder,
-    WebviewUrl, WindowBuilder, WindowEvent,
+    webview::WebviewBuilder, window::WindowBuilder, AppHandle, LogicalPosition, LogicalSize,
+    Manager, Position, Size, State, WebviewUrl, WindowEvent,
 };
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
